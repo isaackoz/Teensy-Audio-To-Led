@@ -22,6 +22,15 @@ const int myInput = AUDIO_INPUT_LINEIN;
 #define DATA_PIN 3
 CRGB leds[NUM_LEDS];
 
+// Rolling average size
+const int rollingAverageSize = 3; // Adjust this to control the window size for the average
+
+// Rolling average buffers
+float redHistory[rollingAverageSize] = {0};
+float greenHistory[rollingAverageSize] = {0};
+float blueHistory[rollingAverageSize] = {0};
+int historyIndex = 0; // Tracks the current position in the history buffer
+
 // Loudness scaling constants
 const float weighting[] = {1.0, 0.9, 0.9, 0.8, 0.8, 0.7, 0.7, 0.6}; // Perceptual weighting
 const int numBands = 8;                                             // Number of critical bands
@@ -53,10 +62,6 @@ void setup()
 //===============================================================================
 // Main
 //===============================================================================
-float prevRed = 0;
-float prevGreen = 0;
-float prevBlue = 0;
-
 void loop()
 {
   unsigned long startTime = millis();
@@ -90,20 +95,32 @@ void loop()
       blue /= maxColor;
     }
 
-    // Apply smoothing (average current and previous values)
-    red = (red + prevRed) / 2;
-    green = (green + prevGreen) / 2;
-    blue = (blue + prevBlue) / 2;
+    // Update rolling average buffers
+    redHistory[historyIndex] = red;
+    greenHistory[historyIndex] = green;
+    blueHistory[historyIndex] = blue;
 
-    // Update previous values for next pass
-    prevRed = red;
-    prevGreen = green;
-    prevBlue = blue;
+    // Calculate rolling averages
+    float redAverage = 0;
+    float greenAverage = 0;
+    float blueAverage = 0;
+    for (int i = 0; i < rollingAverageSize; i++)
+    {
+      redAverage += redHistory[i];
+      greenAverage += greenHistory[i];
+      blueAverage += blueHistory[i];
+    }
+    redAverage /= rollingAverageSize;
+    greenAverage /= rollingAverageSize;
+    blueAverage /= rollingAverageSize;
+
+    // Increment history index
+    historyIndex = (historyIndex + 1) % rollingAverageSize;
 
     // Scale RGB by brightness
-    uint8_t r = static_cast<uint8_t>(red * brightnessScale * 255);
-    uint8_t g = static_cast<uint8_t>(green * brightnessScale * 255);
-    uint8_t b = static_cast<uint8_t>(blue * brightnessScale * 255);
+    uint8_t r = static_cast<uint8_t>(redAverage * brightnessScale * 255);
+    uint8_t g = static_cast<uint8_t>(greenAverage * brightnessScale * 255);
+    uint8_t b = static_cast<uint8_t>(blueAverage * brightnessScale * 255);
 
     // Set LED colors
     for (int i = 0; i < NUM_LEDS; i++)
@@ -116,22 +133,12 @@ void loop()
 
     // Update LEDs
     FastLED.show();
-
-    // Debugging output
-    Serial.print("Loudness: ");
-    Serial.println(totalLoudness);
-    Serial.print("Bands: ");
-    for (int i = 0; i < numBands; i++)
-    {
-      Serial.print(bands[i]);
-      Serial.print(" ");
-    }
-
-    // Record the end time and calculate duration
-    unsigned long endTime = millis();
-    unsigned long loopDuration = endTime - startTime;
-    Serial.print("Loop Duration: ");
-    Serial.print(loopDuration);
-    Serial.println(" ms");
   }
+
+  // Record the end time and calculate duration
+  unsigned long endTime = millis();
+  unsigned long loopDuration = endTime - startTime;
+  Serial.print("Loop Duration: ");
+  Serial.print(loopDuration);
+  Serial.println(" ms");
 }
