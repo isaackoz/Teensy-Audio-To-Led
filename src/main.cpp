@@ -7,12 +7,12 @@
 #include <cmath>
 
 // GUItool: begin automatically generated code
-AudioInputI2S i2s1;            // xy=242,357
-AudioMixer4 mixer1;            // xy=500,385
-AudioAnalyzeFFT1024 fft1024_1; // xy=654,350
+AudioInputI2S i2s1;          // xy=242,357
+AudioMixer4 mixer1;          // xy=500,385
+AudioAnalyzeFFT256 fft256_1; // xy=675,377
 AudioConnection patchCord1(i2s1, 0, mixer1, 0);
 AudioConnection patchCord2(i2s1, 1, mixer1, 1);
-AudioConnection patchCord3(mixer1, fft1024_1);
+AudioConnection patchCord3(mixer1, fft256_1);
 AudioControlSGTL5000 sgtl5000_1; // xy=309,293
 
 const int myInput = AUDIO_INPUT_LINEIN;
@@ -23,7 +23,7 @@ const int myInput = AUDIO_INPUT_LINEIN;
 CRGB leds[NUM_LEDS];
 
 // Loudness scaling constants
-const float weighting[] = {1.0, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2}; // Perceptual weighting
+const float weighting[] = {1.0, 0.9, 0.9, 0.8, 0.8, 0.7, 0.7, 0.6}; // Perceptual weighting
 const int numBands = 8;                                             // Number of critical bands
 const int bandSize = 128 / numBands;                                // FFT bins per band
 
@@ -53,9 +53,14 @@ void setup()
 //===============================================================================
 // Main
 //===============================================================================
+float prevRed = 0;
+float prevGreen = 0;
+float prevBlue = 0;
+
 void loop()
 {
-  if (fft1024_1.available()) // Ensure FFT data is available
+  unsigned long startTime = millis();
+  if (fft256_1.available()) // Ensure FFT data is available
   {
     // Analyze FFT into perceptual bands
     float bands[numBands] = {0};
@@ -64,7 +69,7 @@ void loop()
     // Calculate loudness per band
     for (int i = 0; i < numBands; i++)
     {
-      bands[i] = fft1024_1.read(i * bandSize, (i + 1) * bandSize - 1) * weighting[i];
+      bands[i] = fft256_1.read(i * bandSize, (i + 1) * bandSize - 1) * weighting[i];
       totalLoudness += bands[i];
     }
 
@@ -84,6 +89,16 @@ void loop()
       green /= maxColor;
       blue /= maxColor;
     }
+
+    // Apply smoothing (average current and previous values)
+    red = (red + prevRed) / 2;
+    green = (green + prevGreen) / 2;
+    blue = (blue + prevBlue) / 2;
+
+    // Update previous values for next pass
+    prevRed = red;
+    prevGreen = green;
+    prevBlue = blue;
 
     // Scale RGB by brightness
     uint8_t r = static_cast<uint8_t>(red * brightnessScale * 255);
@@ -111,12 +126,12 @@ void loop()
       Serial.print(bands[i]);
       Serial.print(" ");
     }
-    Serial.println();
-    Serial.print("RGB: ");
-    Serial.print(r);
-    Serial.print(", ");
-    Serial.print(g);
-    Serial.print(", ");
-    Serial.println(b);
+
+    // Record the end time and calculate duration
+    unsigned long endTime = millis();
+    unsigned long loopDuration = endTime - startTime;
+    Serial.print("Loop Duration: ");
+    Serial.print(loopDuration);
+    Serial.println(" ms");
   }
 }
